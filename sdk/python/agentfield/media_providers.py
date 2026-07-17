@@ -1026,6 +1026,48 @@ class OpenRouterProvider(MediaProvider):
             raw_response=payload,
         )
 
+
+class MiniMaxProvider(MediaProvider):
+    """MiniMax music generation provider (global and China endpoints)."""
+
+    def __init__(self, api_key: Optional[str] = None, region: str = "global_en"):
+        self._api_key = api_key
+        self.region = region
+
+    @property
+    def name(self) -> str:
+        return "minimax"
+
+    @property
+    def supported_modalities(self) -> List[str]:
+        return ["audio"]
+
+    async def generate_music(self, prompt: str, model: Optional[str] = None, duration: Optional[int] = None, **kwargs) -> MultimodalResponse:
+        import os
+        import aiohttp
+
+        key = self._api_key or os.environ.get("MINIMAX_API_KEY", "")
+        if not key:
+            raise ValueError("MiniMax API key required. Set MINIMAX_API_KEY or pass api_key.")
+        endpoint = "https://api.minimaxi.com/v1/music_generation" if self.region == "cn_zh" else "https://api.minimax.io/v1/music_generation"
+        payload = {"model": model or "music-3.0", "prompt": prompt}
+        for field in ("lyrics", "stream", "output_format", "audio_setting", "lyrics_optimizer", "is_instrumental", "audio_url", "audio_base64", "cover_feature_id", "aigc_watermark"):
+            if field in kwargs:
+                payload[field] = kwargs[field]
+        if duration is not None:
+            payload.setdefault("audio_setting", {})["duration"] = duration
+        headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+        timeout = aiohttp.ClientTimeout(total=kwargs.get("timeout", 300))
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(endpoint, json=payload, headers=headers) as response:
+                body = await response.json(content_type=None)
+                if response.status >= 400 or body.get("base_resp", {}).get("status_code") != 0:
+                    raise RuntimeError(f"MiniMax music generation failed ({response.status}): {body}")
+        data = body.get("data", {})
+        audio = data.get("audio")
+        output_format = payload.get("output_format", "url")
+        return MultimodalResponse(text=prompt, audio=AudioOutput(data=audio if output_format == "hex" else None, format="mp3", url=audio if output_format == "url" else None) if audio else None, images=[], files=[], raw_response=body)
+
     async def generate_video(
         self,
         prompt: str,
@@ -1654,6 +1696,7 @@ _PROVIDERS: Dict[str, type] = {
     "fal": FalProvider,
     "litellm": LiteLLMProvider,
     "openrouter": OpenRouterProvider,
+    "minimax": MiniMaxProvider,
 }
 
 

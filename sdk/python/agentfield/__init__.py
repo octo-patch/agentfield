@@ -39,6 +39,7 @@ from .media_providers import (
     FalProvider,
     LiteLLMProvider,
     OpenRouterProvider,
+    MiniMaxProvider,
     get_provider,
     register_provider,
 )

@@ -1974,6 +1974,13 @@ class AgentAI:
                 format="mp3",
             )
         """
+        if model and model.startswith("minimax/"):
+            from .media_providers import MiniMaxProvider
+            provider = MiniMaxProvider()
+            model = model.split("/", 1)[1]
+            return await provider.generate_music(
+                prompt=prompt, model=model, duration=duration, **kwargs
+            )
         return await self._openrouter_provider.generate_music(
             prompt=prompt,
             model=model,
